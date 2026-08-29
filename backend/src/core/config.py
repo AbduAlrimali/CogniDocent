@@ -21,7 +21,9 @@ class AppSettings(BaseSettings):
     APP_ROOT_PATH: str = "/api"
     APP_DOCS_PATH: str = "/"
 
-    FASTAPI_KEY: str = Field(validation_alias="FASTAPI_KEY")
+    FASTAPI_KEY: str = Field(
+        default="dev-key-change-me", validation_alias="FASTAPI_KEY"
+    )
     BASE_HOSTNAME: str = Field(default="localhost", validation_alias="BASE_HOSTNAME")
 
     APP_ENV: str = Field(default="production", validation_alias="APP_ENV")
@@ -33,3 +35,27 @@ class AppSettings(BaseSettings):
         extra="ignore",  # Good practice: ignores extra env vars unrelated to this class
         frozen=True,
     )
+
+
+class DatabaseSettings(BaseSettings):
+    database_url: str = Field(
+        default="postgresql+asyncpg://postgres:postgres@localhost:5432/cognidocent",
+        validation_alias="DATABASE_URL",
+    )
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        frozen=True,
+    )
+
+
+@lru_cache
+def get_app_settings() -> AppSettings:
+    return AppSettings()
+
+
+@lru_cache
+def get_db_settings() -> DatabaseSettings:
+    return DatabaseSettings()
