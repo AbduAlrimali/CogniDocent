@@ -4,7 +4,8 @@ from src.models.chat import Chat
 from src.models.message import Message
 from src.models.media import Media
 from src.models.provider_settings import ProviderSettings
-from src.models.enums import AIProvider
+from src.core.enums import AIProvider
+from src.models.document_page import DocumentPage
 
 __all__ = [
     "Document",
@@ -14,4 +15,5 @@ __all__ = [
     "Media",
     "ProviderSettings",
     "AIProvider",
+    "DocumentPage",
 ]

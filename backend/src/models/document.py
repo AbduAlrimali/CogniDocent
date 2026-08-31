@@ -8,6 +8,7 @@ from src.infra.postgres_adapter import Base
 
 if TYPE_CHECKING:
     from src.models.project import Project
+    from src.models.document_page import DocumentPage
 
 
 class Document(Base):
@@ -58,6 +59,11 @@ class Document(Base):
         back_populates="document",
         uselist=False,
         cascade="all, delete-orphan",
+    )
+    pages: Mapped[list[DocumentPage]] = relationship(
+        "DocumentPage",
+        back_populates="document",
+        cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:
