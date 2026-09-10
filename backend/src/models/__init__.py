@@ -4,8 +4,9 @@ from src.models.chat import Chat
 from src.models.message import Message
 from src.models.media import Media
 from src.models.provider_settings import ProviderSettings
-from src.core.enums import AIProvider
+from src.core.enums import ChatProvider, EmbeddingProvider
 from src.models.document_page import DocumentPage
+from src.models.embedding_index_metadata import EmbeddingIndexMetadata
 
 __all__ = [
     "Document",
@@ -14,6 +15,8 @@ __all__ = [
     "Message",
     "Media",
     "ProviderSettings",
-    "AIProvider",
+    "ChatProvider",
+    "EmbeddingProvider",
     "DocumentPage",
+    "EmbeddingIndexMetadata",
 ]

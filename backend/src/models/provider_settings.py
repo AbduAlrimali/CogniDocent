@@ -4,7 +4,7 @@ import uuid
 from sqlalchemy import String, Boolean, DateTime, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column
 from src.infra.postgres_adapter import Base
-from src.core.enums import AIProvider
+from src.core.enums import ChatProvider
 
 
 class ProviderSettings(Base):
@@ -20,8 +20,8 @@ class ProviderSettings(Base):
         index=True,
         comment="Unique identifier for the provider settings",
     )
-    provider_name: Mapped[AIProvider] = mapped_column(
-        SQLEnum(AIProvider, name="ai_provider", native_enum=True),
+    provider_name: Mapped[ChatProvider] = mapped_column(
+        SQLEnum(ChatProvider, name="ai_provider", native_enum=True),
         unique=True,
         nullable=False,
         comment="Name of the AI provider (e.g. OLLAMA, GEMINI, OPENAI)",

@@ -9,6 +9,7 @@ from src.infra.postgres_adapter import Base
 if TYPE_CHECKING:
     from src.models.document import Document
     from src.models.chat import Chat
+    from src.models.embedding_index_metadata import EmbeddingIndexMetadata
 
 
 class Project(Base):
@@ -72,6 +73,12 @@ class Project(Base):
     chats: Mapped[list[Chat]] = relationship(
         "Chat",
         back_populates="project",
+        cascade="all, delete-orphan"
+    )
+    embedding_metadata: Mapped[EmbeddingIndexMetadata | None] = relationship(
+        "EmbeddingIndexMetadata",
+        back_populates="project",
+        uselist=False,
         cascade="all, delete-orphan"
     )
 

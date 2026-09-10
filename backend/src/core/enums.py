@@ -5,18 +5,36 @@ class Role(str, Enum):
     USER = "user"
     ASSISTANT = "assistant"
     SYSTEM = "system"
+    TOOL = "tool"
 
 
-class AIProvider(str, Enum):
-    """
-    Enum representing supported AI/LLM providers in the application.
-    Easy to extend in the future with new providers.
-    """
+class ThinkingLevel(str, Enum):
+    """Defines the reasoning effort budget for supporting models."""
+
+    NONE = "none"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class ChatProvider(str, Enum):
+    """Providers that support text generation and reasoning."""
 
     OLLAMA = "OLLAMA"
     GEMINI = "GEMINI"
     OPENAI = "OPENAI"
     ANTHROPIC = "ANTHROPIC"
+
+
+class EmbeddingProvider(str, Enum):
+    """Providers that support vector representation."""
+
+    OLLAMA = "OLLAMA"
+    GEMINI = "GEMINI"
+    OPENAI = "OPENAI"
+    VOYAGE = "VOYAGE"
+    COHERE = "COHERE"
+    FASTEMBED = "FASTEMBED"
 
 
 class UploadStatus(str, Enum):

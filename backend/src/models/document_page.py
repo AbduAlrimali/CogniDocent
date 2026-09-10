@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import String, Integer, ForeignKey, Text, Index, JSON
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from pgvector.sqlalchemy import Vector
 from src.infra.postgres_adapter import Base
 
 if TYPE_CHECKING:
@@ -54,6 +55,11 @@ class DocumentPage(Base):
         nullable=True,
         comment="Postgres tsvector for full-text search indexing"
     )
+    embedding: Mapped[list[float] | None] = mapped_column(
+        Vector(768),
+        nullable=True,
+        comment="Vector embedding for semantic retrieval"
+    )
 
     # Relationships
     document: Mapped[Document] = relationship(
@@ -61,12 +67,18 @@ class DocumentPage(Base):
         back_populates="pages"
     )
 
-    # GIN Index for fast full-text searches on the search_vector
+    # GIN Index for fast full-text searches, and HNSW index for vector cosine similarity
     __table_args__ = (
         Index(
             "idx_document_pages_search_vector",
             "search_vector",
             postgresql_using="gin"
+        ),
+        Index(
+            "idx_document_pages_embedding",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"}
         ),
     )
 

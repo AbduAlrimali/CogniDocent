@@ -4,7 +4,7 @@ from sqlalchemy import select, update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
-from src.core.enums import AIProvider
+from src.core.enums import ChatProvider
 from src.core.interfaces.ilogger import ILogger
 from src.core.interfaces.iprovider_settings_repository import IProviderSettingsRepository
 from src.core.exceptions.database import (
@@ -37,7 +37,7 @@ class ProviderSettingsRepository(IProviderSettingsRepository):
             )
             raise RepositoryError(f"Failed to retrieve provider settings: {str(e)}") from e
 
-    async def get_by_provider(self, provider_name: AIProvider) -> ProviderSettings | None:
+    async def get_by_provider(self, provider_name: ChatProvider) -> ProviderSettings | None:
         try:
             stmt = select(ProviderSettings).where(ProviderSettings.provider_name == provider_name)
             result = await self.session.execute(stmt)
@@ -105,7 +105,7 @@ class ProviderSettingsRepository(IProviderSettingsRepository):
             )
             raise RepositoryError(f"Failed to create provider settings: {str(e)}") from e
 
-    async def update(self, provider_name: AIProvider, **kwargs) -> ProviderSettings:
+    async def update(self, provider_name: ChatProvider, **kwargs) -> ProviderSettings:
         try:
             settings = await self.get_by_provider(provider_name)
             if not settings:
@@ -145,7 +145,7 @@ class ProviderSettingsRepository(IProviderSettingsRepository):
             )
             raise RepositoryError(f"Failed to update provider settings: {str(e)}") from e
 
-    async def delete(self, provider_name: AIProvider) -> bool:
+    async def delete(self, provider_name: ChatProvider) -> bool:
         try:
             settings = await self.get_by_provider(provider_name)
             if not settings:

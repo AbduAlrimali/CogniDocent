@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import uuid
 from typing import Sequence
-from src.core.enums import AIProvider
+from src.core.enums import ChatProvider
 from src.models.provider_settings import ProviderSettings
 
 
@@ -18,7 +18,7 @@ class IProviderSettingsRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_by_provider(self, provider_name: AIProvider) -> ProviderSettings | None:
+    async def get_by_provider(self, provider_name: ChatProvider) -> ProviderSettings | None:
         """
         Retrieve settings for a specific AI provider.
         """
@@ -46,14 +46,14 @@ class IProviderSettingsRepository(ABC):
         pass
 
     @abstractmethod
-    async def update(self, provider_name: AIProvider, **kwargs) -> ProviderSettings:
+    async def update(self, provider_name: ChatProvider, **kwargs) -> ProviderSettings:
         """
         Update settings for a specific AI provider.
         """
         pass
 
     @abstractmethod
-    async def delete(self, provider_name: AIProvider) -> bool:
+    async def delete(self, provider_name: ChatProvider) -> bool:
         """
         Delete settings for an AI provider.
         """

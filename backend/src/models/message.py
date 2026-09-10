@@ -6,7 +6,7 @@ from sqlalchemy import String, Integer, DateTime, ForeignKey, Text, Enum as SQLE
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.infra.postgres_adapter import Base
-from src.core.enums import AIProvider
+from src.core.enums import ChatProvider
 
 if TYPE_CHECKING:
     from src.models.chat import Chat
@@ -56,8 +56,8 @@ class Message(Base):
     token_count: Mapped[int | None] = mapped_column(
         Integer, nullable=True, comment="Optional token count of the message"
     )
-    ai_provider: Mapped[AIProvider | None] = mapped_column(
-        SQLEnum(AIProvider, name="ai_provider", native_enum=True),
+    ai_provider: Mapped[ChatProvider | None] = mapped_column(
+        SQLEnum(ChatProvider, name="ai_provider", native_enum=True),
         nullable=True,
         default=None,
         comment="AI Provider used for this message (if assistant role)",

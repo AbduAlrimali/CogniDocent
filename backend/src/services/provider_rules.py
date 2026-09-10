@@ -1,12 +1,12 @@
 import litellm
 from typing import Any, Dict
-from src.core.enums import AIProvider
+from src.core.enums import ChatProvider
 
-GLOBAL_REGISTRY: Dict[str, Dict[str, Any]] = {p.value: {} for p in AIProvider}
+GLOBAL_REGISTRY: Dict[str, Dict[str, Any]] = {p.value: {} for p in ChatProvider}
 
 
 def build_models_registry() -> Dict[str, Dict[str, Any]]:
-    allowed_providers = {p.value.lower(): p for p in AIProvider}
+    allowed_providers = {p.value.lower(): p for p in ChatProvider}
 
     for model_key, metadata in litellm.model_cost.items():
         if "/" not in model_key:

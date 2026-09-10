@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import String, Boolean, DateTime, ForeignKey, JSON, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.infra.postgres_adapter import Base
-from src.core.enums import AIProvider
+from src.core.enums import ChatProvider
 
 if TYPE_CHECKING:
     from src.models.project import Project
@@ -33,11 +33,11 @@ class Chat(Base):
     title: Mapped[str] = mapped_column(
         String, nullable=False, comment="Title/Name of the chat session"
     )
-    ai_provider: Mapped[AIProvider] = mapped_column(
-        SQLEnum(AIProvider, name="ai_provider", native_enum=True),
+    ai_provider: Mapped[ChatProvider] = mapped_column(
+        SQLEnum(ChatProvider, name="ai_provider", native_enum=True),
         nullable=False,
-        default=AIProvider.OLLAMA,
-        server_default=AIProvider.OLLAMA.value,
+        default=ChatProvider.OLLAMA,
+        server_default=ChatProvider.OLLAMA.value,
         comment="AI Provider used for this chat",
     )
     ai_model: Mapped[str] = mapped_column(
