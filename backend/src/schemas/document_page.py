@@ -1,15 +1,16 @@
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 import uuid
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 
 class DocumentPageBase(BaseModel):
     doc_id: uuid.UUID
     page_num: int
     content: str
-    markdown_content: Optional[str] = None
-    page_metadata: Optional[Dict[str, Any]] = None
+    content_vector: Optional[List[float]] = None
+    deep_content: Optional[str] = None
+    deep_content_vector: Optional[List[float]] = None
 
 
 class DocumentPageCreate(DocumentPageBase):
@@ -18,16 +19,23 @@ class DocumentPageCreate(DocumentPageBase):
 
 class DocumentPageUpdate(BaseModel):
     content: Optional[str] = None
-    markdown_content: Optional[str] = None
-    page_metadata: Optional[Dict[str, Any]] = None
-    embedding: Optional[List[float]] = None
+    content_vector: Optional[List[float]] = None
+    deep_content: Optional[str] = None
+    deep_content_vector: Optional[List[float]] = None
+
+
+class PageUpdateDTO(BaseModel):
+    page_id: uuid.UUID
+    deep_content: Optional[str] = None
+    deep_content_vector: Optional[List[float]] = None
+    content: Optional[str] = None
+    content_vector: Optional[List[float]] = None
 
 
 class DocumentPageResponse(DocumentPageBase):
     model_config = ConfigDict(from_attributes=True)
 
     page_id: uuid.UUID
-    embedding: Optional[List[float]] = None
 
 
 class EmbeddingIndexMetadataResponse(BaseModel):

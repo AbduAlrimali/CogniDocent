@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, ConfigDict, Field
 import uuid
 from src.core.enums import UploadStatus
@@ -20,6 +20,8 @@ class DocumentCreate(DocumentBase):
 class DocumentUpdate(BaseModel):
     primary_name: Optional[str] = None
     status: Optional[str] = None
+    toc: Optional[List[Dict[str, Any]]] = None
+    doc_metadata: Optional[Dict[str, Any]] = Field(default=None, alias="metadata")
 
 
 class DocumentDelete(BaseModel):
@@ -34,10 +36,12 @@ class DocumentQueryParams(BaseModel):
 
 
 class DocumentResponse(DocumentBase):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
-    doc_id: int
+    doc_id: uuid.UUID
     file_path: str
     file_size_bytes: int
     file_hash: str
     uploaded_at: datetime
+    toc: Optional[List[Dict[str, Any]]] = None
+    doc_metadata: Optional[Dict[str, Any]] = Field(default=None, alias="metadata")

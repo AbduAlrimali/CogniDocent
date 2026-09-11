@@ -11,7 +11,7 @@ class ProjectBase(BaseModel):
 
 
 class ProjectCreate(ProjectBase):
-    pass
+    doc_id: uuid.UUID
 
 
 class ProjectUpdate(BaseModel):
@@ -37,5 +37,6 @@ class ProjectResponse(ProjectBase):
     model_config = ConfigDict(from_attributes=True)
 
     project_id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    doc_id: uuid.UUID
     created_at: datetime
     updated_at: Optional[datetime] = None

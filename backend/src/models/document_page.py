@@ -1,8 +1,7 @@
 from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING, Any
-from sqlalchemy import String, Integer, ForeignKey, Text, Index, JSON
-from sqlalchemy.dialects.postgresql import TSVECTOR
+from sqlalchemy import String, Integer, ForeignKey, Text, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from pgvector.sqlalchemy import Vector
 from src.infra.postgres_adapter import Base
@@ -14,7 +13,7 @@ if TYPE_CHECKING:
 class DocumentPage(Base):
     """
     SQLAlchemy Model representing the 'document_pages' table.
-    Stores extracted page-level content with search indexing.
+    Stores extracted page-level content with vector search indexing.
     """
     __tablename__ = "document_pages"
 
@@ -39,26 +38,20 @@ class DocumentPage(Base):
         nullable=False,
         comment="Text content extracted from the document page"
     )
-    markdown_content: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-        comment="Markdown content extracted from VLM deep parsing"
-    )
-    page_metadata: Mapped[dict | None] = mapped_column(
-        "metadata",
-        JSON,
-        nullable=True,
-        comment="Page-level metadata stored as JSON"
-    )
-    search_vector: Mapped[Any | None] = mapped_column(
-        TSVECTOR,
-        nullable=True,
-        comment="Postgres tsvector for full-text search indexing"
-    )
-    embedding: Mapped[list[float] | None] = mapped_column(
+    content_vector: Mapped[list[float] | None] = mapped_column(
         Vector(768),
         nullable=True,
-        comment="Vector embedding for semantic retrieval"
+        comment="Vector embedding of parsed text"
+    )
+    deep_content: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Deep parsed text extracted via Vision LLM"
+    )
+    deep_content_vector: Mapped[list[float] | None] = mapped_column(
+        Vector(768),
+        nullable=True,
+        comment="Vector embedding of deep parsed text"
     )
 
     # Relationships
@@ -67,18 +60,19 @@ class DocumentPage(Base):
         back_populates="pages"
     )
 
-    # GIN Index for fast full-text searches, and HNSW index for vector cosine similarity
+    # HNSW indexes for vector cosine similarity
     __table_args__ = (
         Index(
-            "idx_document_pages_search_vector",
-            "search_vector",
-            postgresql_using="gin"
+            "idx_document_pages_content_vector",
+            "content_vector",
+            postgresql_using="hnsw",
+            postgresql_ops={"content_vector": "vector_cosine_ops"}
         ),
         Index(
-            "idx_document_pages_embedding",
-            "embedding",
+            "idx_document_pages_deep_content_vector",
+            "deep_content_vector",
             postgresql_using="hnsw",
-            postgresql_ops={"embedding": "vector_cosine_ops"}
+            postgresql_ops={"deep_content_vector": "vector_cosine_ops"}
         ),
     )
 

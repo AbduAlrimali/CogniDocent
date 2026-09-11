@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any, Iterator, List, Union
 
-from src.core.dtos.fast_parser_dtos import (
+from src.core.dtos.fast_parser_dto import (
     FastDocumentMetadataDTO,
     FastPageContentDTO,
     FastParsedDocumentDTO,
@@ -178,6 +178,42 @@ class PyMuPDFParser(IFastParser):
             )
             raise FastParserError(
                 f"Unexpected error during metadata extraction: {e}"
+            ) from e
+        finally:
+            doc.close()
+
+    def render_page(
+        self, file_path: Union[str, Path], page_num: int, dpi: int = 150
+    ) -> bytes:
+        path_str = str(file_path)
+        doc = self._open_doc(file_path)
+        try:
+            if page_num < 1 or page_num > len(doc):
+                self._logger.warning(
+                    "Requested page number out of bounds for rendering",
+                    file_path=path_str,
+                    requested_page=page_num,
+                    total_pages=len(doc),
+                )
+                raise PageExtractionError(
+                    path_str, page_num, "Page number out of bounds."
+                )
+
+            page = doc[page_num - 1]
+            pix = page.get_pixmap(dpi=dpi)
+            return pix.tobytes("png")
+        except PageExtractionError:
+            raise
+        except Exception as e:
+            self._logger.error(
+                "Unexpected error during page rendering",
+                exc_info=e,
+                file_path=path_str,
+                page_num=page_num,
+                reason=str(e),
+            )
+            raise PageExtractionError(
+                path_str, page_num, f"Failed to render page: {e}"
             ) from e
         finally:
             doc.close()

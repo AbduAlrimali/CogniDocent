@@ -6,10 +6,12 @@ from src.core.dtos.llm_provider_dtos import EmbeddingConfigDTO
 from src.core.enums import EmbeddingProvider
 from src.core.interfaces.idocument_page_repository import IDocumentPageRepository
 from src.core.interfaces.iembedding_provider import IEmbeddingProvider
+from src.core.interfaces.ivision_provider import IVisionProvider
 from src.core.interfaces.ilogger import ILogger
 from src.models.document_page import DocumentPage
-from src.schemas.document_page import DocumentPageResponse
+from src.schemas.document_page import DocumentPageResponse, PageUpdateDTO
 from src.services.embedding_service import EmbeddingService
+from src.services.pdf_service import PDFService
 
 
 @pytest.fixture
@@ -20,11 +22,10 @@ def mock_repo():
     repo.nullify_project_embeddings = AsyncMock()
     repo.upsert_embedding_metadata = AsyncMock()
     repo.count_populated_embeddings = AsyncMock()
-    repo.search_pages_fts = AsyncMock()
     repo.search_pages_vector = AsyncMock()
     repo.get_fallback_pages = AsyncMock()
     repo.get_pages_missing_embeddings = AsyncMock()
-    repo.update_page_embeddings = AsyncMock()
+    repo.update_pages = AsyncMock()
     return repo
 
 
@@ -42,11 +43,27 @@ def mock_logger():
 
 
 @pytest.fixture
-def service(mock_repo, mock_provider, mock_logger):
+def mock_pdf_service():
+    pdf_svc = AsyncMock(spec=PDFService)
+    pdf_svc.render_page = AsyncMock(return_value=b"fake_image_bytes")
+    return pdf_svc
+
+
+@pytest.fixture
+def mock_vision_llm():
+    vision = AsyncMock(spec=IVisionProvider)
+    vision.extract_markdown = AsyncMock(return_value="# Extracted Markdown")
+    return vision
+
+
+@pytest.fixture
+def service(mock_repo, mock_provider, mock_logger, mock_pdf_service, mock_vision_llm):
     return EmbeddingService(
         document_page_repo=mock_repo,
         embedding_provider=mock_provider,
         logger=mock_logger,
+        pdf_service=mock_pdf_service,
+        vision_llm=mock_vision_llm,
     )
 
 
@@ -115,41 +132,6 @@ async def test_update_project_embedding_model_skip_when_same(service, mock_repo)
 
 
 @pytest.mark.asyncio
-async def test_hybrid_retrieve_fallback_unpopulated(service, mock_repo, mock_provider):
-    doc_id = uuid.uuid4()
-    mock_repo.count_populated_embeddings.return_value = 0
-
-    page1 = DocumentPage(page_id=uuid.uuid4(), doc_id=doc_id, page_num=1, content="Content 1", embedding=None)
-    page2 = DocumentPage(page_id=uuid.uuid4(), doc_id=doc_id, page_num=2, content="Content 2", embedding=None)
-    mock_repo.search_pages_fts.return_value = [page1, page2]
-
-    pages = await service.hybrid_retrieve(doc_id=doc_id, query="quantum", limit=3)
-
-    # Service orchestrates FTS fallback + lazy embedding generation
-    assert len(pages) == 2
-    mock_repo.search_pages_fts.assert_called_once_with(doc_id=doc_id, query="quantum", limit=3)
-    mock_provider.embed_batch.assert_called_once_with(["Content 1", "Content 2"])
-    assert mock_repo.update_page_embeddings.called
-    assert page1.embedding == [0.1, 0.2, 0.3]
-    assert page2.embedding == [0.4, 0.5, 0.6]
-
-
-@pytest.mark.asyncio
-async def test_hybrid_retrieve_vector_search_when_populated(service, mock_repo, mock_provider):
-    doc_id = uuid.uuid4()
-    mock_repo.count_populated_embeddings.return_value = 5
-
-    page1 = DocumentPage(page_id=uuid.uuid4(), doc_id=doc_id, page_num=1, content="Content 1", embedding=[0.1, 0.2, 0.3])
-    mock_repo.search_pages_vector.return_value = [page1]
-
-    pages = await service.hybrid_retrieve(doc_id=doc_id, query="quantum", limit=3)
-
-    assert len(pages) == 1
-    mock_provider.embed_text.assert_called_once_with("quantum")
-    mock_repo.search_pages_vector.assert_called_once_with(doc_id=doc_id, query_vector=[0.1, 0.2, 0.3], limit=3)
-
-
-@pytest.mark.asyncio
 async def test_reembed_project_pages(service, mock_repo, mock_provider):
     project_id = uuid.uuid4()
     page_id = uuid.uuid4()
@@ -160,7 +142,6 @@ async def test_reembed_project_pages(service, mock_repo, mock_provider):
         doc_id=doc_id,
         page_num=1,
         content="Test page content",
-        embedding=None,
     )
     mock_repo.get_pages_missing_embeddings.return_value = [mock_page]
 
@@ -168,7 +149,6 @@ async def test_reembed_project_pages(service, mock_repo, mock_provider):
 
     assert count == 1
     mock_provider.embed_batch.assert_called_once_with(["Test page content"])
-    from src.core.dtos.embedding_dtos import PageEmbeddingUpdateDTO
-    mock_repo.update_page_embeddings.assert_called_once_with(
-        [PageEmbeddingUpdateDTO(page_id=page_id, embedding=[0.1, 0.2, 0.3])]
+    mock_repo.update_pages.assert_called_once_with(
+        [PageUpdateDTO(page_id=page_id, content_vector=[0.1, 0.2, 0.3])]
     )

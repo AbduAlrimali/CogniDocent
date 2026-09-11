@@ -67,6 +67,7 @@ class LLMRouteConfigDTO(BaseLLMConfigDTO):
     """The active routing configuration retrieved from the user's database settings."""
 
     provider: ChatProvider = ChatProvider.OPENAI
+    model_name: str
     temperature: float = 0.0
     thinking_level: ThinkingLevel = ThinkingLevel.NONE
 
@@ -82,6 +83,6 @@ class EmbeddingConfigDTO(BaseLLMConfigDTO):
 
 @dataclass(frozen=True)
 class SystemAIConfigDTO:
-    # Swapped frequently by the user in UI
     active_chat_model: LLMRouteConfigDTO
     embedding_config: EmbeddingConfigDTO
+    vision_model: LLMRouteConfigDTO

@@ -1,30 +1,25 @@
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import RedisDsn, Field, model_validator
-import os
 import logging
-from typing import List
 
 logger = logging.getLogger("app.core.config")
 
 
 class AppSettings(BaseSettings):
-    APP_NAME: str = "ScholarMind"
+    APP_NAME: str = "CogniDocent"
     LOGO_URL: str = Field(
         default="https://files.catbox.moe/00z6ji.png",
         validation_alias="LOGO_URL",
     )
     APP_VERSION: str = "1.0.0"
     APP_DESCRIPTION: str = (
-        "An AI-powered platform to assist students with their academic needs."
+        "CogniDocent is a powerful document search and retrieval tool that uses "
+        "Large Language Models (LLMs) to provide accurate and relevant information "
+        "from your documents."
     )
     APP_ROOT_PATH: str = "/api"
     APP_DOCS_PATH: str = "/"
-
-    FASTAPI_KEY: str = Field(
-        default="dev-key-change-me", validation_alias="FASTAPI_KEY"
-    )
-    BASE_HOSTNAME: str = Field(default="localhost", validation_alias="BASE_HOSTNAME")
 
     APP_ENV: str = Field(default="production", validation_alias="APP_ENV")
     APP_LOG_LEVEL: int = Field(default=logging.INFO, validation_alias="APP_LOG_LEVEL")

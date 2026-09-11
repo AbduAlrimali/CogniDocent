@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Iterator, List, Union
 
-from src.core.dtos.fast_parser_dtos import (
+from src.core.dtos.fast_parser_dto import (
     FastDocumentMetadataDTO,
     FastPageContentDTO,
     FastParsedDocumentDTO,
@@ -93,5 +93,25 @@ class IFastParser(ABC):
 
         Returns:
             FastDocumentMetadataDTO with page counts and author/title fields.
+        """
+        pass
+
+    @abstractmethod
+    def render_page(
+        self, file_path: Union[str, Path], page_num: int, dpi: int = 150
+    ) -> bytes:
+        """Renders a single page to image bytes (PNG format).
+
+        Args:
+            file_path: Path to the target PDF.
+            page_num: 1-indexed target page number.
+            dpi: Resolution for rendering the page image.
+
+        Returns:
+            Image bytes in PNG format.
+
+        Raises:
+            DocumentNotFoundError: If the file does not exist.
+            PageExtractionError: If page_num is out of bounds or rendering fails.
         """
         pass

@@ -1,13 +1,12 @@
 import uuid
 from typing import Sequence, Optional, List, Tuple
-from sqlalchemy import select, update, func, text
+from sqlalchemy import select, update, func, text, or_, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from src.core.interfaces.ilogger import ILogger
 from src.core.interfaces.idocument_page_repository import IDocumentPageRepository
-from src.schemas.document_page import DocumentPageResponse
-from src.core.dtos.embedding_dtos import PageEmbeddingUpdateDTO
+from src.schemas.document_page import DocumentPageResponse, PageUpdateDTO
 from src.core.exceptions.database import (
     RepositoryError,
     DocumentPageNotFoundError,
@@ -62,6 +61,31 @@ class DocumentPageRepository(IDocumentPageRepository):
             self.logger.error("Database error listing pages for document", doc_id=doc_id, exc_info=e)
             raise RepositoryError(f"Failed to list pages: {str(e)}") from e
 
+    async def get_pages_in_range(
+        self, doc_id: uuid.UUID, start_page: int, end_page: int
+    ) -> Sequence[DocumentPage]:
+        try:
+            stmt = (
+                select(DocumentPage)
+                .where(
+                    DocumentPage.doc_id == doc_id,
+                    DocumentPage.page_num >= start_page,
+                    DocumentPage.page_num <= end_page,
+                )
+                .order_by(DocumentPage.page_num.asc())
+            )
+            result = await self.session.execute(stmt)
+            return result.scalars().all()
+        except SQLAlchemyError as e:
+            self.logger.error(
+                "Database error retrieving pages in range",
+                doc_id=doc_id,
+                start_page=start_page,
+                end_page=end_page,
+                exc_info=e,
+            )
+            raise RepositoryError(f"Failed to retrieve pages in range: {str(e)}") from e
+
     async def create(self, page: DocumentPage) -> DocumentPage:
         try:
             self.session.add(page)
@@ -76,6 +100,20 @@ class DocumentPageRepository(IDocumentPageRepository):
             await self.session.rollback()
             self.logger.error("Database error creating document page", doc_id=page.doc_id, page_num=page.page_num, exc_info=e)
             raise RepositoryError(f"Failed to create page: {str(e)}") from e
+
+    async def bulk_create(self, pages: Sequence[DocumentPage]) -> Sequence[DocumentPage]:
+        try:
+            self.session.add_all(pages)
+            await self.session.commit()
+            return pages
+        except IntegrityError as e:
+            await self.session.rollback()
+            self.logger.warning("DocumentPage integrity violation on bulk_create", exc_info=e)
+            raise DuplicatePageError("pages", "Duplicate page entries detected") from e
+        except SQLAlchemyError as e:
+            await self.session.rollback()
+            self.logger.error("Database error bulk creating document pages", count=len(pages), exc_info=e)
+            raise RepositoryError(f"Failed to bulk create pages: {str(e)}") from e
 
     async def update(self, page_id: uuid.UUID, **kwargs) -> DocumentPage:
         try:
@@ -114,9 +152,6 @@ class DocumentPageRepository(IDocumentPageRepository):
             await self.session.rollback()
             self.logger.error("Database error deleting page", page_id=page_id, exc_info=e)
             raise RepositoryError(f"Failed to delete page: {str(e)}") from e
-
-    async def search_pages(self, doc_id: uuid.UUID, query: str, limit: int = 10) -> Sequence[DocumentPage]:
-        return await self.search_pages_fts(doc_id=doc_id, query=query, limit=limit)
 
     async def get_embedding_metadata(self, project_id: uuid.UUID) -> Optional[Tuple[str, int]]:
         try:
@@ -160,20 +195,33 @@ class DocumentPageRepository(IDocumentPageRepository):
 
     async def alter_embedding_dimensions(self, new_dimensions: int) -> None:
         try:
-            # 1. Drop existing HNSW index
+            # 1. Drop existing HNSW indexes
             await self.session.execute(
-                text("DROP INDEX IF EXISTS idx_document_pages_embedding;")
+                text("DROP INDEX IF EXISTS idx_document_pages_content_vector;")
             )
-            # 2. Alter column type to new vector dimensions with USING NULL
+            await self.session.execute(
+                text("DROP INDEX IF EXISTS idx_document_pages_deep_content_vector;")
+            )
+            # 2. Alter column types to new vector dimensions with USING NULL
             await self.session.execute(
                 text(
-                    f"ALTER TABLE document_pages ALTER COLUMN embedding TYPE vector({new_dimensions}) USING NULL;"
+                    f"ALTER TABLE document_pages ALTER COLUMN content_vector TYPE vector({new_dimensions}) USING NULL;"
                 )
             )
-            # 3. Recreate HNSW index for cosine distance
             await self.session.execute(
                 text(
-                    "CREATE INDEX idx_document_pages_embedding ON document_pages USING hnsw (embedding vector_cosine_ops);"
+                    f"ALTER TABLE document_pages ALTER COLUMN deep_content_vector TYPE vector({new_dimensions}) USING NULL;"
+                )
+            )
+            # 3. Recreate HNSW indexes for cosine distance
+            await self.session.execute(
+                text(
+                    "CREATE INDEX idx_document_pages_content_vector ON document_pages USING hnsw (content_vector vector_cosine_ops);"
+                )
+            )
+            await self.session.execute(
+                text(
+                    "CREATE INDEX idx_document_pages_deep_content_vector ON document_pages USING hnsw (deep_content_vector vector_cosine_ops);"
                 )
             )
             await self.session.commit()
@@ -188,7 +236,7 @@ class DocumentPageRepository(IDocumentPageRepository):
             await self.session.execute(
                 update(DocumentPage)
                 .where(DocumentPage.doc_id == doc_subquery)
-                .values(embedding=None)
+                .values(content_vector=None, deep_content_vector=None)
             )
             await self.session.commit()
         except SQLAlchemyError as e:
@@ -200,7 +248,10 @@ class DocumentPageRepository(IDocumentPageRepository):
         try:
             stmt = select(func.count(DocumentPage.page_id)).where(
                 DocumentPage.doc_id == doc_id,
-                DocumentPage.embedding.isnot(None),
+                or_(
+                    DocumentPage.content_vector.isnot(None),
+                    DocumentPage.deep_content_vector.isnot(None),
+                ),
             )
             result = await self.session.execute(stmt)
             return result.scalar() or 0
@@ -208,43 +259,30 @@ class DocumentPageRepository(IDocumentPageRepository):
             self.logger.error("Database error counting populated embeddings", doc_id=doc_id, exc_info=e)
             raise RepositoryError(f"Failed to count populated embeddings: {str(e)}") from e
 
-    async def search_pages_fts(
-        self, doc_id: uuid.UUID, query: str, limit: int = 3
-    ) -> Sequence[DocumentPage]:
-        try:
-            tsquery = func.websearch_to_tsquery("english", query)
-            stmt = (
-                select(DocumentPage)
-                .where(
-                    DocumentPage.doc_id == doc_id,
-                    DocumentPage.search_vector.op("@@")(tsquery),
-                )
-                .order_by(func.ts_rank_cd(DocumentPage.search_vector, tsquery).desc())
-                .limit(limit)
-            )
-            result = await self.session.execute(stmt)
-            return result.scalars().all()
-        except SQLAlchemyError as e:
-            self.logger.error("Database error during FTS page search", doc_id=doc_id, query=query, exc_info=e)
-            raise RepositoryError(f"FTS search failed: {str(e)}") from e
-
     async def search_pages_vector(
         self, doc_id: uuid.UUID, query_vector: List[float], limit: int = 3
     ) -> Sequence[DocumentPage]:
         try:
+            effective_vector = case(
+                (DocumentPage.deep_content_vector.isnot(None), DocumentPage.deep_content_vector),
+                else_=DocumentPage.content_vector,
+            )
             stmt = (
                 select(DocumentPage)
                 .where(
                     DocumentPage.doc_id == doc_id,
-                    DocumentPage.embedding.isnot(None),
+                    or_(
+                        DocumentPage.deep_content_vector.isnot(None),
+                        DocumentPage.content_vector.isnot(None),
+                    ),
                 )
-                .order_by(DocumentPage.embedding.cosine_distance(query_vector))
+                .order_by(effective_vector.cosine_distance(query_vector))
                 .limit(limit)
             )
             result = await self.session.execute(stmt)
             return result.scalars().all()
         except SQLAlchemyError as e:
-            self.logger.error("Database error during vector cosine search", doc_id=doc_id, exc_info=e)
+            self.logger.error("Database error during unified vector search", doc_id=doc_id, exc_info=e)
             raise RepositoryError(f"Vector search failed: {str(e)}") from e
 
     async def get_fallback_pages(
@@ -274,7 +312,7 @@ class DocumentPageRepository(IDocumentPageRepository):
                 .join(Project, Project.doc_id == DocumentPage.doc_id)
                 .where(
                     Project.project_id == project_id,
-                    DocumentPage.embedding.is_(None),
+                    DocumentPage.content_vector.is_(None),
                 )
                 .order_by(DocumentPage.page_num.asc())
                 .limit(batch_size)
@@ -286,20 +324,31 @@ class DocumentPageRepository(IDocumentPageRepository):
             self.logger.error("Database error fetching pages missing embeddings", project_id=project_id, exc_info=e)
             raise RepositoryError(f"Failed to fetch pages missing embeddings: {str(e)}") from e
 
-    async def update_page_embeddings(
-        self, updates: Sequence[PageEmbeddingUpdateDTO]
+    async def update_pages(
+        self, updates: Sequence[PageUpdateDTO]
     ) -> None:
         if not updates:
             return
         try:
             for item in updates:
-                await self.session.execute(
-                    update(DocumentPage)
-                    .where(DocumentPage.page_id == item.page_id)
-                    .values(embedding=item.embedding)
-                )
+                values = {}
+                if item.deep_content is not None:
+                    values["deep_content"] = item.deep_content
+                if item.deep_content_vector is not None:
+                    values["deep_content_vector"] = item.deep_content_vector
+                if item.content is not None:
+                    values["content"] = item.content
+                if item.content_vector is not None:
+                    values["content_vector"] = item.content_vector
+
+                if values:
+                    await self.session.execute(
+                        update(DocumentPage)
+                        .where(DocumentPage.page_id == item.page_id)
+                        .values(**values)
+                    )
             await self.session.commit()
         except SQLAlchemyError as e:
             await self.session.rollback()
-            self.logger.error("Database error updating page embeddings", count=len(updates), exc_info=e)
-            raise RepositoryError(f"Failed to update page embeddings: {str(e)}") from e
+            self.logger.error("Database error updating pages", count=len(updates), exc_info=e)
+            raise RepositoryError(f"Failed to update pages: {str(e)}") from e

@@ -2,7 +2,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import uuid
 from typing import TYPE_CHECKING
-from sqlalchemy import String, Integer, DateTime
+from sqlalchemy import String, Integer, DateTime, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.infra.postgres_adapter import Base
 
@@ -50,6 +50,17 @@ class Document(Base):
     )
     primary_name: Mapped[str] = mapped_column(
         String, nullable=False, comment="Original name of the uploaded file"
+    )
+    toc: Mapped[list | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="Extracted table of contents / bookmarks stored as JSON",
+    )
+    doc_metadata: Mapped[dict | None] = mapped_column(
+        "metadata",
+        JSON,
+        nullable=True,
+        comment="Document header metadata stored as JSON",
     )
 
     # Relationships

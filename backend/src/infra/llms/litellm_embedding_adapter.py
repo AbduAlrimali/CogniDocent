@@ -7,12 +7,21 @@ from src.core.dtos.llm_provider_dtos import EmbeddingConfigDTO
 from src.core.enums import EmbeddingProvider
 from src.core.interfaces.iembedding_provider import IEmbeddingProvider
 from src.core.interfaces.ilogger import ILogger
+from src.core.exceptions.embedding_exceptions import (
+    EmbeddingProviderError,
+    EmbeddingConnectionError,
+    EmbeddingAuthenticationError,
+    EmbeddingRateLimitError,
+    EmbeddingContextLengthExceededError,
+    EmbeddingDimensionMismatchError,
+)
 
 
 class LiteLLMEmbeddingAdapter(IEmbeddingProvider):
     """
     Adapter using LiteLLM to standardize embedding calls across local (Ollama)
     and cloud providers (OpenAI, Gemini, Cohere, Voyage).
+    Translates raw library/HTTP errors into domain embedding exceptions.
     """
 
     def __init__(self, config: EmbeddingConfigDTO, logger: ILogger) -> None:
@@ -44,14 +53,20 @@ class LiteLLMEmbeddingAdapter(IEmbeddingProvider):
                 kwargs["api_base"] = self.config.base_url
 
             response = await litellm.aembedding(**kwargs)
-            return response.data[0]["embedding"]
-        except Exception as e:
-            self.logger.error(
-                "Failed to generate embedding for text",
-                model=self.formatted_model_name,
-                exc_info=e,
-            )
+            embedding: List[float] = response.data[0]["embedding"]
+
+            if self.config.dimensions and len(embedding) != self.config.dimensions:
+                raise EmbeddingDimensionMismatchError(
+                    expected=self.config.dimensions,
+                    received=len(embedding),
+                    model_name=self.formatted_model_name,
+                )
+
+            return embedding
+        except EmbeddingProviderError:
             raise
+        except Exception as e:
+            self._handle_exception(e)
 
     async def embed_batch(self, texts: List[str]) -> List[List[float]]:
         if not texts:
@@ -68,12 +83,45 @@ class LiteLLMEmbeddingAdapter(IEmbeddingProvider):
                 kwargs["api_base"] = self.config.base_url
 
             response = await litellm.aembedding(**kwargs)
-            return [item["embedding"] for item in response.data]
-        except Exception as e:
-            self.logger.error(
-                "Failed to generate embeddings batch",
-                model=self.formatted_model_name,
-                batch_size=len(texts),
-                exc_info=e,
-            )
+            embeddings: List[List[float]] = [item["embedding"] for item in response.data]
+
+            if self.config.dimensions:
+                for emb in embeddings:
+                    if len(emb) != self.config.dimensions:
+                        raise EmbeddingDimensionMismatchError(
+                            expected=self.config.dimensions,
+                            received=len(emb),
+                            model_name=self.formatted_model_name,
+                        )
+
+            return embeddings
+        except EmbeddingProviderError:
             raise
+        except Exception as e:
+            self._handle_exception(e)
+
+    def _handle_exception(self, exc: Exception) -> None:
+        """Translates provider and library-level errors into domain exceptions."""
+        exc_str = str(exc).lower()
+        provider_name = self.config.provider.value
+
+        self.logger.error(
+            f"{provider_name} embedding request failed",
+            exc_info=exc,
+            provider=provider_name,
+            model=self.formatted_model_name,
+            error=str(exc),
+        )
+
+        if any(term in exc_str for term in ["auth", "api_key", "unauthorized", "forbidden", "401", "403"]):
+            raise EmbeddingAuthenticationError(provider_name) from exc
+        if any(term in exc_str for term in ["rate limit", "429", "quota", "resource_exhausted"]):
+            raise EmbeddingRateLimitError(retry_after_seconds=60) from exc
+        if any(term in exc_str for term in ["context length", "maximum context", "token limit", "too many tokens", "max_tokens", "maximum sequence length"]):
+            raise EmbeddingContextLengthExceededError() from exc
+        if any(term in exc_str for term in ["connection", "refused", "unreachable", "timeout", "timed out", "connecterror"]):
+            raise EmbeddingConnectionError(
+                provider_name, endpoint=self.config.base_url or "configured endpoint"
+            ) from exc
+
+        raise EmbeddingProviderError(f"{provider_name} embedding error: {exc}") from exc

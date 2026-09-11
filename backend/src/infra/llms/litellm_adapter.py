@@ -4,8 +4,9 @@ from typing import Any, Dict
 from langchain_litellm import ChatLiteLLM
 
 from .base_langchain_adapter import BaseLangChainLLMAdapter
-from .ilogger import ILogger
-from .litellm_config_dtos import LLMRouteConfigDTO, ThinkingLevel, ProviderType
+from src.core.interfaces.ilogger import ILogger
+from src.core.dtos.llm_provider_dtos import LLMRouteConfigDTO
+from src.core.enums import ThinkingLevel, ChatProvider
 
 
 class LiteLLMAdapter(BaseLangChainLLMAdapter):
@@ -29,11 +30,11 @@ class LiteLLMAdapter(BaseLangChainLLMAdapter):
 
     def _format_litellm_model_string(self, config: LLMRouteConfigDTO) -> str:
         """Prepends the provider tag required by LiteLLM routing."""
-        if config.provider == ProviderType.OLLAMA:
+        if config.provider == ChatProvider.OLLAMA:
             return f"ollama/{config.model_name}"
-        if config.provider == ProviderType.ANTHROPIC:
+        if config.provider == ChatProvider.ANTHROPIC:
             return f"anthropic/{config.model_name}"
-        if config.provider == ProviderType.GEMINI:
+        if config.provider == ChatProvider.GEMINI:
             return f"gemini/{config.model_name}"
 
         # OpenAI does not require a prefix in LiteLLM by default
@@ -46,12 +47,12 @@ class LiteLLMAdapter(BaseLangChainLLMAdapter):
         if config.thinking_level == ThinkingLevel.NONE:
             return kwargs
 
-        if config.provider == ProviderType.OPENAI and config.model_name.startswith(
+        if config.provider == ChatProvider.OPENAI and config.model_name.startswith(
             ("o1", "o3")
         ):
             kwargs["reasoning_effort"] = config.thinking_level.value
 
-        elif config.provider == ProviderType.ANTHROPIC and "3-7" in config.model_name:
+        elif config.provider == ChatProvider.ANTHROPIC and "3-7" in config.model_name:
             budget_map = {
                 ThinkingLevel.LOW: 2048,
                 ThinkingLevel.MEDIUM: 4096,
